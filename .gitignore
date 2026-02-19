@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Circuit artifacts (keep some, ignore others)
+packages/circuits/build/*.r1cs
+packages/circuits/build/*.sym
+packages/circuits/build/witness/
+packages/circuits/build/*_js/generate_witness.js
+packages/circuits/build/*_js/witness_calculator.js
+
+# Keep these circuit artifacts
+!packages/circuits/build/*.wasm
+!packages/circuits/build/keys/
+!packages/circuits/build/verification_key.json
+
+# Environment files
+.env
+.env.local
+.env.*.local
+packages/demo/src/config.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Temp files
+*.tmp
+.cache/
+.temp/
+
+docs/

@@ -1,0 +1,38 @@
+{
+  "name": "@proofoflove/chain-adapters",
+  "version": "0.1.0",
+  "description": "Multi-chain balance adapters for Solana, Ethereum, and other blockchains",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./adapters/*": {
+      "types": "./dist/adapters/*.d.ts",
+      "default": "./dist/adapters/*.js"
+    },
+    "./aggregator": {
+      "types": "./dist/aggregator.d.ts",
+      "default": "./dist/aggregator.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.90.0",
+    "ethers": "^6.11.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.17",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.2"
+  }
+}

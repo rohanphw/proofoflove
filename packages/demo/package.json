@@ -1,0 +1,23 @@
+{
+  "name": "@proofoflove/demo",
+  "version": "0.1.0",
+  "description": "CLI and web demo for testing the ZK wealth verification system",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "cli": "node --loader ts-node/esm src/cli.ts",
+    "dev": "vite",
+    "build": "tsc && vite build"
+  },
+  "dependencies": {
+    "@proofoflove/chain-adapters": "workspace:*",
+    "@proofoflove/core": "workspace:*",
+    "snarkjs": "^0.7.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.17",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3",
+    "vite": "^5.1.0"
+  }
+}

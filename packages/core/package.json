@@ -1,0 +1,46 @@
+{
+  "name": "@proofoflove/core",
+  "version": "0.1.0",
+  "description": "Core SDK for zero-knowledge proof generation and verification",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./prover": {
+      "types": "./dist/prover.d.ts",
+      "default": "./dist/prover.js"
+    },
+    "./verifier": {
+      "types": "./dist/verifier.d.ts",
+      "default": "./dist/verifier.js"
+    },
+    "./tiers": {
+      "types": "./dist/tiers.d.ts",
+      "default": "./dist/tiers.js"
+    },
+    "./nullifier": {
+      "types": "./dist/nullifier.d.ts",
+      "default": "./dist/nullifier.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "snarkjs": "^0.7.3",
+    "circomlibjs": "^0.1.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.17",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.2"
+  }
+}

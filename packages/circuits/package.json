@@ -1,0 +1,18 @@
+{
+  "name": "@proofoflove/circuits",
+  "version": "0.1.0",
+  "description": "Circom circuits for wealth tier zero-knowledge proofs",
+  "private": true,
+  "scripts": {
+    "compile": "./scripts/compile.sh",
+    "setup": "./scripts/setup.sh",
+    "test": "mocha tests/*.test.js --timeout 300000"
+  },
+  "devDependencies": {
+    "circom_tester": "^0.0.19",
+    "circomlib": "^2.0.5",
+    "chai": "^4.4.1",
+    "mocha": "^10.3.0",
+    "snarkjs": "^0.7.3"
+  }
+}

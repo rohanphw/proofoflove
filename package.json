@@ -1,0 +1,27 @@
+{
+  "name": "proofoflove",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Zero-knowledge proof system for verifying crypto wealth tiers in a dating app",
+  "scripts": {
+    "setup": "pnpm install && pnpm run build:circuits",
+    "build": "pnpm -r --filter=!circuits --stream build",
+    "build:circuits": "cd packages/circuits && chmod +x scripts/*.sh && ./scripts/compile.sh && ./scripts/setup.sh",
+    "test": "pnpm -r --stream test",
+    "test:circuits": "cd packages/circuits && npm test",
+    "demo:cli": "cd packages/demo && npm run cli",
+    "demo:web": "cd packages/demo && npm run dev",
+    "clean": "pnpm -r exec rm -rf dist build node_modules && rm -rf node_modules",
+    "lint": "pnpm -r --stream lint"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.17",
+    "typescript": "^5.3.3",
+    "tsup": "^8.0.1",
+    "vitest": "^1.2.2"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}
