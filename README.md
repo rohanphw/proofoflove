@@ -254,6 +254,3 @@ After validating the circuit MVP:
 - [Helius RPC Docs](https://www.helius.dev/docs)
 - [Alchemy Docs](https://docs.alchemy.com/)
 
-## License
-
-MIT

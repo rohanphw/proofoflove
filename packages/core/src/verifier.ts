@@ -1,6 +1,6 @@
-import { groth16 } from 'snarkjs';
-import { getTierForBalance } from './tiers.js';
-import type { ProofData, VerificationResult } from './types.js';
+import { groth16 } from "snarkjs";
+import { TIERS, getTierByNumber } from "./tiers.js";
+import type { ProofData, VerificationResult } from "./types.js";
 
 /**
  * Wealth tier proof verifier
@@ -28,28 +28,37 @@ export class WealthVerifier {
       const isValid = await groth16.verify(
         this.vkey,
         proofData.publicSignals,
-        proofData.proof
+        proofData.proof,
       );
 
       if (!isValid) {
         return {
           valid: false,
-          error: 'Invalid proof: verification failed'
+          error: "Invalid proof: verification failed",
         };
       }
 
       // Extract public signals
       // Order: [tier_lower_bound, tier_upper_bound, nullifier, timestamp]
-      const [tierLower, tierUpper, nullifier, timestamp] = proofData.publicSignals.map(BigInt);
+      const [tierLower, tierUpper, nullifier, timestamp] =
+        proofData.publicSignals.map(BigInt);
 
-      // Validate tier bounds match the claimed tier
-      const minBalanceCents = Number(tierLower); // Use lower bound as approximation
-      const expectedTier = getTierForBalance(minBalanceCents);
-
-      if (proofData.tier !== expectedTier.tier) {
+      // Validate that the public signal bounds match a known tier definition
+      const claimedTier = getTierByNumber(proofData.tier);
+      if (!claimedTier) {
         return {
           valid: false,
-          error: `Tier mismatch: claimed ${proofData.tier}, expected ${expectedTier.tier}`
+          error: `Unknown tier number: ${proofData.tier}`,
+        };
+      }
+
+      if (
+        BigInt(claimedTier.lowerBound) !== tierLower ||
+        BigInt(claimedTier.upperBound) !== tierUpper
+      ) {
+        return {
+          valid: false,
+          error: `Tier bounds mismatch: proof has [${tierLower}, ${tierUpper}), tier ${proofData.tier} expects [${claimedTier.lowerBound}, ${claimedTier.upperBound})`,
         };
       }
 
@@ -58,12 +67,12 @@ export class WealthVerifier {
         tier: proofData.tier,
         tierLabel: proofData.tierLabel,
         nullifier: nullifier.toString(),
-        timestamp: Number(timestamp)
+        timestamp: Number(timestamp),
       };
     } catch (error) {
       return {
         valid: false,
-        error: error instanceof Error ? error.message : 'Verification failed'
+        error: error instanceof Error ? error.message : "Verification failed",
       };
     }
   }
@@ -74,7 +83,7 @@ export class WealthVerifier {
    * @returns Array of verification results
    */
   async verifyBatch(proofs: ProofData[]): Promise<VerificationResult[]> {
-    return Promise.all(proofs.map(proof => this.verify(proof)));
+    return Promise.all(proofs.map((proof) => this.verify(proof)));
   }
 
   /**
@@ -83,8 +92,8 @@ export class WealthVerifier {
    * @returns WealthVerifier instance
    */
   static async loadFromFile(vkeyPath: string): Promise<WealthVerifier> {
-    const fs = await import('fs/promises');
-    const vkey = JSON.parse(await fs.readFile(vkeyPath, 'utf-8'));
+    const fs = await import("fs/promises");
+    const vkey = JSON.parse(await fs.readFile(vkeyPath, "utf-8"));
     return new WealthVerifier(vkey);
   }
 
@@ -96,7 +105,9 @@ export class WealthVerifier {
   static async loadFromUrl(vkeyUrl: string): Promise<WealthVerifier> {
     const response = await fetch(vkeyUrl);
     if (!response.ok) {
-      throw new Error(`Failed to load verification key: ${response.statusText}`);
+      throw new Error(
+        `Failed to load verification key: ${response.statusText}`,
+      );
     }
     const vkey = await response.json();
     return new WealthVerifier(vkey);

@@ -12,17 +12,21 @@ export class WealthProver {
 
   /**
    * Create a prover instance
-   * @param artifactsPath - Path to circuit artifacts directory (for Node.js)
+   * @param wasmPath - Path to compiled circuit WASM file
+   * @param zkeyPath - Path to proving key (zkey) file
    */
-  constructor(artifactsPath?: string) {
-    if (artifactsPath) {
-      this.wasmPath = `${artifactsPath}/wealth_tier.wasm`;
-      this.zkeyPath = `${artifactsPath}/wealth_tier_final.zkey`;
-    }
+  constructor(wasmPath?: string, zkeyPath?: string) {
+    this.wasmPath = wasmPath;
+    this.zkeyPath = zkeyPath;
   }
 
   /**
    * Generate proof of wealth tier (Node.js version)
+   *
+   * Uses the AVERAGE of 3 balance snapshots to determine tier.
+   * This is more forgiving than MIN — a temporary dip in one month
+   * won't disqualify you from your tier.
+   *
    * @param balances - 3 aggregated balance snapshots in USD cents
    * @param nullifier - Identity commitment (from generateNullifier)
    * @param timestamp - Unix timestamp (defaults to now)
@@ -37,12 +41,12 @@ export class WealthProver {
       throw new Error('Prover not initialized with artifact paths. Use generateProofBrowser() instead.');
     }
 
-    // Determine tier from minimum balance
-    const minBalance = Math.min(...balances);
-    const tier = getTierForBalance(minBalance);
+    // Determine tier from average balance (floor division)
+    const avgBalance = Math.floor((balances[0] + balances[1] + balances[2]) / 3);
+    const tier = getTierForBalance(avgBalance);
 
     console.log(`Generating proof for Tier ${tier.tier} (${tier.label})`);
-    console.log(`Min balance: ${(minBalance / 100).toFixed(2)} USD`);
+    console.log(`Avg balance: ${(avgBalance / 100).toFixed(2)} USD`);
 
     // Prepare circuit inputs
     const inputs: CircuitInputs = {
@@ -94,8 +98,8 @@ export class WealthProver {
     wasmBuffer: ArrayBuffer,
     zkeyBuffer: ArrayBuffer
   ): Promise<ProofData> {
-    const minBalance = Math.min(...balances);
-    const tier = getTierForBalance(minBalance);
+    const avgBalance = Math.floor((balances[0] + balances[1] + balances[2]) / 3);
+    const tier = getTierForBalance(avgBalance);
     const timestamp = Math.floor(Date.now() / 1000);
 
     const inputs: CircuitInputs = {
@@ -133,7 +137,7 @@ export class WealthProver {
    * @returns Estimated time in seconds
    */
   static estimateProofTime(): { min: number; max: number } {
-    // Based on typical performance for ~150-200 constraint circuits
+    // Based on typical performance for ~200-250 constraint circuits
     return { min: 5, max: 15 };
   }
 }

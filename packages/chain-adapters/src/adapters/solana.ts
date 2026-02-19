@@ -6,6 +6,60 @@ import type {
   AdapterConfig,
 } from "../types.js";
 
+// ──────────────────────────────────────────────────────────
+// Helius getTransactionsForAddress response types
+// ──────────────────────────────────────────────────────────
+
+interface GtfaRpcResponse {
+  result?: { data: FullTransactionResult[] };
+  error?: { message?: string; code?: number };
+}
+
+interface FullTransactionResult {
+  slot: number;
+  blockTime: number | null;
+  transaction: {
+    message: {
+      accountKeys: Array<string | ParsedAccountKey>;
+    };
+  };
+  meta: TransactionMeta | null;
+}
+
+interface TransactionMeta {
+  preBalances: number[];
+  postBalances: number[];
+  preTokenBalances?: TokenBalanceEntry[];
+  postTokenBalances?: TokenBalanceEntry[];
+}
+
+interface TokenBalanceEntry {
+  accountIndex: number;
+  mint: string;
+  owner?: string;
+  uiTokenAmount: {
+    amount: string;
+    decimals: number;
+    uiAmount: number | null;
+    uiAmountString?: string;
+  };
+}
+
+interface ParsedAccountKey {
+  pubkey: string;
+  signer: boolean;
+  writable: boolean;
+}
+
+interface PythHistoryResponse {
+  c?: number[];
+  o?: number[];
+  h?: number[];
+  l?: number[];
+  t?: number[];
+  s?: string;
+}
+
 /**
  * Solana adapter using Helius RPC for historical balance queries
  *
@@ -108,13 +162,13 @@ export class SolanaAdapter implements ChainAdapter {
               transactionDetails: "full",
               encoding: "jsonParsed",
               maxSupportedTransactionVersion: 0,
-              sortOrder: "desc", // newest first
-              limit: 1, // only need the most recent tx before target
+              sortOrder: "desc",
+              limit: 1,
               filters: {
                 blockTime: {
-                  lte: targetTimestamp, // at or before target time
+                  lte: targetTimestamp,
                 },
-                status: "succeeded", // only successful txs affect balances
+                status: "succeeded",
               },
             },
           ],
@@ -125,7 +179,7 @@ export class SolanaAdapter implements ChainAdapter {
         throw new Error(`Helius RPC error: ${response.statusText}`);
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as GtfaRpcResponse;
 
       if (data.error) {
         throw new Error(
@@ -135,7 +189,6 @@ export class SolanaAdapter implements ChainAdapter {
 
       const txs = data.result?.data;
       if (!txs || txs.length === 0) {
-        // No transactions before this timestamp — wallet had 0 SOL at that point
         return 0;
       }
 
@@ -150,7 +203,7 @@ export class SolanaAdapter implements ChainAdapter {
           `Wallet ${address} not found in accountKeys of most recent tx`,
         );
         return 0;
-      }';;;;;'
+      }
 
       const postBalance = tx.meta?.postBalances?.[walletIndex];
       if (postBalance === undefined || postBalance === null) {
@@ -164,7 +217,6 @@ export class SolanaAdapter implements ChainAdapter {
         `Failed to fetch historical SOL balance for ${address} at ${targetTimestamp}:`,
         error,
       );
-      // Fallback: fetch current balance (degraded accuracy for MVP)
       return this.getCurrentSOLBalance(address);
     }
   }
@@ -203,13 +255,13 @@ export class SolanaAdapter implements ChainAdapter {
               encoding: "jsonParsed",
               maxSupportedTransactionVersion: 0,
               sortOrder: "desc",
-              limit: 20, // Fetch more txs to capture all token states
+              limit: 20,
               filters: {
                 blockTime: {
                   lte: targetTimestamp,
                 },
                 status: "succeeded",
-                tokenAccounts: "balanceChanged", // Include ATA transactions
+                tokenAccounts: "balanceChanged",
               },
             },
           ],
@@ -220,7 +272,7 @@ export class SolanaAdapter implements ChainAdapter {
         throw new Error(`Helius RPC error: ${response.statusText}`);
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as GtfaRpcResponse;
 
       if (data.error) {
         throw new Error(
@@ -242,12 +294,9 @@ export class SolanaAdapter implements ChainAdapter {
       >();
 
       for (const tx of txs) {
-        const accountKeys = this.extractAccountKeys(tx);
-        const postTokenBalances: any[] = tx.meta?.postTokenBalances || [];
+        const postTokenBalances = tx.meta?.postTokenBalances || [];
 
         for (const tokenBal of postTokenBalances) {
-          // postTokenBalances references accounts by index into accountKeys
-          // The "owner" field tells us who owns this token account
           const owner = tokenBal.owner;
           const mint = tokenBal.mint;
 
@@ -285,12 +334,12 @@ export class SolanaAdapter implements ChainAdapter {
    * jsonParsed encoding returns accountKeys as objects with { pubkey, signer, writable }
    * or as plain strings depending on the tx version.
    */
-  private extractAccountKeys(tx: any): string[] {
+  private extractAccountKeys(tx: FullTransactionResult): string[] {
     const message = tx.transaction?.message;
     if (!message) return [];
 
     const accountKeys = message.accountKeys || [];
-    return accountKeys.map((key: any) =>
+    return accountKeys.map((key) =>
       typeof key === "string" ? key : key.pubkey,
     );
   }
@@ -316,10 +365,9 @@ export class SolanaAdapter implements ChainAdapter {
     timestamp: number,
   ): Promise<number> {
     try {
-      // Pyth Benchmarks API provides historical price data
       const pythSymbol = `Crypto.${symbol}/USD`;
-      const from = timestamp - 3600; // 1 hour before
-      const to = timestamp + 3600; // 1 hour after
+      const from = timestamp - 3600;
+      const to = timestamp + 3600;
 
       const response = await fetch(
         `https://benchmarks.pyth.network/v1/shims/tradingview/history?` +
@@ -330,15 +378,14 @@ export class SolanaAdapter implements ChainAdapter {
         throw new Error(`Pyth API error: ${response.statusText}`);
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as PythHistoryResponse;
       if (data.c && data.c.length > 0) {
-        return data.c[0]; // Close price
+        return data.c[0];
       }
 
       throw new Error(`No price data for ${symbol} at ${timestamp}`);
     } catch (error) {
       console.warn(`Failed to fetch price for ${symbol}:`, error);
-      // Fallback: use approximate current price (limitation for MVP)
       return symbol === "SOL" ? 100 : 0;
     }
   }
@@ -351,24 +398,20 @@ export class SolanaAdapter implements ChainAdapter {
     mint: string,
     timestamp: number,
   ): Promise<number> {
-    // Known SPL token mints
-    const KNOWN_TOKENS: Record<string, string> = {
+    const KNOWN_TOKENS: { [key: string]: string } = {
       EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: "USDC",
       Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB: "USDT",
     };
 
     const symbol = KNOWN_TOKENS[mint];
     if (!symbol) {
-      // Unknown token — skip for MVP
       return 0;
     }
 
-    // Stablecoins are always $1
     if (symbol === "USDC" || symbol === "USDT") {
       return 1.0;
     }
 
-    // For other tokens, fetch price from Pyth
     return this.getPriceAtTimestamp(symbol, timestamp);
   }
 

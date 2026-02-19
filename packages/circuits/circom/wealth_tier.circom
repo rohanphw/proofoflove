@@ -5,10 +5,13 @@ include "../node_modules/circomlib/circuits/gates.circom";
 include "./utils.circom";
 
 // Main circuit for proving wealth tier
-// Proves: MIN(balance_1, balance_2, balance_3) falls within [tier_lower_bound, tier_upper_bound)
+// Proves: AVG(balance_1, balance_2, balance_3) falls within [tier_lower_bound, tier_upper_bound)
 //
 // Private inputs: 3 aggregated balance snapshots (USD in cents)
 // Public inputs: tier bounds, nullifier (identity commitment), timestamp
+//
+// Uses AVERAGE instead of MINIMUM for a more forgiving wealth check —
+// a temporary dip in one month won't disqualify you from your tier.
 //
 // NOTE: For Tier 7 ($5M+, no natural upper bound), use MAX_BALANCE as tier_upper_bound.
 // MAX_BALANCE = 10^16 cents = $100 trillion (far exceeds any realistic balance)
@@ -25,24 +28,24 @@ template WealthTier() {
     signal input nullifier;         // hash(wallet_addresses + user_secret) - prevents multi-accounting
     signal input timestamp;         // Unix timestamp of proof generation
 
-    // Step 1: Compute minimum balance across 3 snapshots
-    // This prevents flash-loan attacks - user must maintain balance for 90 days
-    component min3 = Min3();
-    min3.in[0] <== balance_1;
-    min3.in[1] <== balance_2;
-    min3.in[2] <== balance_3;
+    // Step 1: Compute average balance across 3 snapshots (integer floor division)
+    // This is more forgiving than MIN — a temporary dip won't tank your tier
+    component avg3 = Avg3();
+    avg3.in[0] <== balance_1;
+    avg3.in[1] <== balance_2;
+    avg3.in[2] <== balance_3;
 
-    signal min_balance;
-    min_balance <== min3.out;
+    signal avg_balance;
+    avg_balance <== avg3.out;
 
-    // Step 2: Check min_balance >= tier_lower_bound
+    // Step 2: Check avg_balance >= tier_lower_bound
     component gte_lower = GreaterEqThan(64);
-    gte_lower.in[0] <== min_balance;
+    gte_lower.in[0] <== avg_balance;
     gte_lower.in[1] <== tier_lower_bound;
 
-    // Step 3: Check min_balance < tier_upper_bound
+    // Step 3: Check avg_balance < tier_upper_bound
     component lt_upper = LessThan(64);
-    lt_upper.in[0] <== min_balance;
+    lt_upper.in[0] <== avg_balance;
     lt_upper.in[1] <== tier_upper_bound;
 
     // Step 4: Both constraints must be satisfied
