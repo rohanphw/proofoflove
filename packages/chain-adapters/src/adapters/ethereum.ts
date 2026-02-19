@@ -85,46 +85,55 @@ export class EthereumAdapter implements ChainAdapter {
   }
 
   /**
-   * Get ERC-20 token balances at a specific block using Alchemy's API
+   * Get ERC-20 token balances at a specific block using eth_call on balanceOf()
+   * Note: alchemy_getTokenBalances does NOT support historical blockTag queries
    */
   private async getERC20BalancesAtBlock(
     address: string,
     blockNumber: number
   ): Promise<Array<{ contractAddress: string; balance: number }>> {
     try {
-      const url = `https://eth-mainnet.g.alchemy.com/v2/${this.apiKey}`;
+      // Known ERC-20 token addresses (mainnet) - for MVP
+      const KNOWN_TOKENS: Array<{ address: string; symbol: string }> = [
+        { address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', symbol: 'USDC' },
+        { address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', symbol: 'USDT' },
+        { address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', symbol: 'WBTC' }
+      ];
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'alchemy_getTokenBalances',
-          params: [
-            address,
-            'DEFAULT_TOKENS',
-            { blockTag: `0x${blockNumber.toString(16)}` }
-          ]
-        })
-      });
+      const balances: Array<{ contractAddress: string; balance: number }> = [];
 
-      if (!response.ok) {
-        throw new Error(`Alchemy API error: ${response.statusText}`);
+      // Minimal ERC-20 ABI for balanceOf and decimals
+      const ERC20_ABI = [
+        'function balanceOf(address) view returns (uint256)',
+        'function decimals() view returns (uint8)'
+      ];
+
+      for (const token of KNOWN_TOKENS) {
+        try {
+          const contract = new ethers.Contract(token.address, ERC20_ABI, this.provider);
+
+          // Query balance at historical block
+          const balance = await contract.balanceOf(address, { blockTag: blockNumber });
+
+          if (balance > 0n) {
+            // Query decimals for this token
+            const decimals = await contract.decimals();
+
+            // Convert to float using correct decimals
+            const balanceFloat = parseFloat(ethers.formatUnits(balance, decimals));
+
+            balances.push({
+              contractAddress: token.address,
+              balance: balanceFloat
+            });
+          }
+        } catch (tokenError) {
+          console.warn(`Failed to fetch ${token.symbol} balance:`, tokenError);
+          // Continue with other tokens
+        }
       }
 
-      const data = await response.json();
-
-      if (data.error) {
-        throw new Error(`Alchemy RPC error: ${data.error.message}`);
-      }
-
-      return (data.result?.tokenBalances || [])
-        .filter((t: any) => t.tokenBalance !== '0x0' && t.tokenBalance !== '0x')
-        .map((t: any) => ({
-          contractAddress: t.contractAddress,
-          balance: parseFloat(ethers.formatUnits(t.tokenBalance, 18))
-        }));
+      return balances;
     } catch (error) {
       console.warn(`Failed to fetch ERC-20 balances for ${address}:`, error);
       return [];
@@ -136,7 +145,14 @@ export class EthereumAdapter implements ChainAdapter {
    */
   private async getPriceAtTimestamp(symbol: string, timestamp: number): Promise<number> {
     try {
-      const coinId = symbol.toLowerCase();
+      // Map symbols to CoinGecko coin IDs
+      const COINGECKO_IDS: Record<string, string> = {
+        'ETH': 'ethereum',
+        'BTC': 'bitcoin',
+        'WBTC': 'wrapped-bitcoin'
+      };
+
+      const coinId = COINGECKO_IDS[symbol] || symbol.toLowerCase();
       const date = new Date(timestamp * 1000);
       const dateStr = `${date.getDate()}-${date.getMonth() + 1}-${date.getFullYear()}`;
 
