@@ -53,3 +53,8 @@ coverage/
 docs/
 
 packages/demo/examples/
+
+packages/demo/public/circuits/*.wasm
+packages/demo/public/circuits/*.zkey
+packages/demo/public/circuits/*.json
+!packages/demo/public/circuits/.gitkeep

@@ -1,213 +1,157 @@
-# Proof of Love - ZK Wealth Verification MVP
+# Proof of Love — ZK Wealth Verification
 
-A Zero-Knowledge Proof system for verifying cryptocurrency wealth tiers without revealing exact balances. Built with Circom, snarkjs, and multi-chain balance adapters.
+A zero-knowledge proof system for verifying cryptocurrency wealth tiers without revealing exact balances. Built with Circom, snarkjs, and multi-chain balance adapters.
 
-## Overview
+## What It Does
 
-**Problem:** Dating apps let you lie about everything. Proof of Love uses cryptography to verify at least one thing is real - your wealth tier.
+**Problem:** Dating apps let you lie about everything.
 
-**Solution:** Connect your crypto wallets, generate a zero-knowledge proof that your minimum balance over 90 days falls within a specific tier (e.g., $50K-$250K), without revealing:
-- Your exact balance
-- Which wallets you own
-- Which blockchains your funds are on
+**Solution:** Proof of Love uses zero-knowledge cryptography to verify your wealth tier — without revealing your exact balance, which wallets you own, or which chains your funds are on.
 
-## Features
+Connect your wallets, and the system computes your **average balance** across 3 monthly snapshots (90-day lookback), then generates a Groth16 proof that this average falls within a specific tier. A verifier can confirm the tier is legitimate without learning anything else.
 
-- **Zero-Knowledge Proofs** using Groth16 (via Circom + snarkjs)
-- **Multi-Chain Support**: Solana + Ethereum (extensible to more chains)
-- **Multi-Wallet Aggregation**: Connect as many wallets as you want
-- **Flash-Loan Protection**: Uses minimum balance across 3 monthly snapshots (90-day lookback)
-- **7 Wealth Tiers**: From Seed (<$1K) to Sun ($5M+)
-- **Privacy-Preserving**: Backend never sees your actual balances
+## Tier System
+
+All values are in USD, calculated as the average across 3 snapshots.
+
+| Tier | Label | Range |
+|------|-------|-------|
+| 1 | 🌱 Seed | < $1K |
+| 2 | 🌿 Sprout | $1K – $10K |
+| 3 | 🌳 Tree | $10K – $50K |
+| 4 | 🏔️ Mountain | $50K – $250K |
+| 5 | 🌊 Ocean | $250K – $1M |
+| 6 | 🌕 Moon | $1M – $5M |
+| 7 | ☀️ Sun | $5M+ |
+
+## Supported Chains & Tokens
+
+**Solana** — SOL, USDC, USDT, hSOL
+
+**Ethereum** — ETH, USDC, USDT, WBTC
+
+**Arbitrum** — ETH, USDC, USDC.e, USDT, WBTC
+
+**Base** — ETH, USDC, USDbC
+
+**HyperEVM** — HYPE (public RPC, no API key needed)
+
+Prices are fetched via Pyth Hermes (live) and CoinGecko → Pyth TradingView
 
 ## Project Structure
 
 ```
 proofoflove/
 ├── packages/
-│   ├── circuits/          # Circom ZK circuit + trusted setup
-│   ├── chain-adapters/    # Multi-chain balance fetchers (Solana, Ethereum)
+│   ├── circuits/          # Circom ZK circuit + trusted setup scripts
+│   ├── chain-adapters/    # Multi-chain balance fetchers
 │   ├── core/              # Proof generation & verification SDK
-│   └── demo/              # CLI demo for testing
-├── spec.md                # Product specification
-└── README.md              # This file
+│   └── demo/              # CLI demo + browser demo (Vite)
+└── README.md
 ```
 
-## Quick Start
-
-### Prerequisites
+## Prerequisites
 
 - Node.js 20+
 - pnpm 8+
-- Circom compiler 2.1.6+
-- Rust (for Circom compilation)
-- API Keys:
-  - [Helius](https://www.helius.dev/) (Solana RPC)
-  - [Alchemy](https://www.alchemy.com/) (Ethereum RPC)
+- Circom compiler 2.1.6+ ([installation guide](https://docs.circom.io/getting-started/installation/))
 
-### Installation
+**API keys** (for whichever chains you want to query):
+
+- [Helius](https://www.helius.dev/) — Solana RPC
+- [QuickNode](https://www.quicknode.com/) or any archive RPC — Ethereum, Arbitrum, Base
+HyperEVM uses a public RPC and doesn't need a key.
+
+## Setup
 
 ```bash
-# 1. Clone and install dependencies
-git clone <repo-url>
+# Clone and install
+git clone https://github.com/rohanphw/proofoflove.git
 cd proofoflove
 pnpm install
+```
 
-# 2. Install Circom compiler
-# See: https://docs.circom.io/getting-started/installation/
-# Quick install (Linux/Mac):
-curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | sh
-git clone https://github.com/iden3/circom.git
-cd circom
-cargo build --release
-cargo install --path circom
+### Compile the Circuit
 
-# 3. Compile circuit and run trusted setup
+```bash
 cd packages/circuits
 ./scripts/compile.sh
 ./scripts/setup.sh
-
-# This generates:
-#   - build/wealth_tier_js/wealth_tier.wasm
-#   - build/keys/wealth_tier_final.zkey
-#   - build/keys/verification_key.json
 ```
 
-### Running the Demo
+This generates:
+- `build/wealth_tier_js/wealth_tier.wasm` — circuit WASM
+- `build/keys/wealth_tier_final.zkey` — proving key
+- `build/keys/verification_key.json` — verification key
+
+### Configure Wallets (CLI Demo)
 
 ```bash
-# 1. Configure API keys and test wallets
 cd packages/demo/src
 cp config.example.json config.json
-# Edit config.json with your API keys and wallet addresses
-
-# 2. Run the CLI demo
-cd ../../..
-pnpm run demo:cli
 ```
 
-**Expected output:**
-```
-========================================
-Proof of Love - ZK Wealth Verification
-========================================
+Edit `config.json` with your API keys and wallet addresses.
 
-Initializing chain adapters...
-✓ Registered chains: solana, ethereum
+## Running
 
-Connected wallets:
-  1. solana: 9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM
-  2. ethereum: 0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb
+### CLI Demo
 
-Fetching historical balances...
-
-Total aggregated balances:
-  Snapshot 1: $125,432.18
-  Snapshot 2: $118,250.00
-  Snapshot 3: $121,890.45
-
-Minimum balance: $118,250.00
-
-Generating zero-knowledge proof...
-
-✅ Proof generated successfully!
-   Tier: 🏔️ Mountain
-   Timestamp: 2026-02-18T19:30:00Z
-
-Verifying proof...
-✅ Proof is VALID
-   Verified tier: 🏔️ Mountain
-
-Demo complete! 🎉
+```bash
+pnpm demo:cli
 ```
 
-## Architecture
+### Web Demo (Browser)
 
-### 1. Circuit (`packages/circuits`)
+The web demo runs proof generation entirely client-side — no backend needed.
 
-The Circom circuit proves: `MIN(balance_1, balance_2, balance_3)` falls within tier range WITHOUT revealing balances.
+```bash
+# Copy circuit artifacts for static serving
+pnpm run --filter @proofoflove/demo setup:circuits
 
-**Private inputs:**
-- `balance_1`, `balance_2`, `balance_3` - Aggregated USD totals (in cents)
-
-**Public inputs:**
-- `tier_lower_bound`, `tier_upper_bound` - Tier boundaries
-- `nullifier` - Identity commitment (prevents multi-accounting)
-- `timestamp` - Proof generation time
-
-**Constraints:**
-```
-min_balance = MIN(balance_1, balance_2, balance_3)
-valid = (min_balance >= tier_lower_bound) AND (min_balance < tier_upper_bound)
+# Launch dev server
+pnpm run --filter @proofoflove/demo dev
 ```
 
-### 2. Chain Adapters (`packages/chain-adapters`)
+Opens at `http://localhost:5173`. Enter your API keys and wallet addresses in the browser, and everything runs locally.
 
-Fetches historical balances from different blockchains.
+## How It Works
 
-**Solana Adapter:**
-- Uses Helius archive RPC
-- Fetches SOL + SPL token balances at 3 historical slots
-- Converts to USD using Pyth price feeds
+### Circuit
 
-**Ethereum Adapter:**
-- Uses Alchemy archive node
-- Fetches ETH + ERC-20 balances at 3 historical blocks
-- Converts to USD using CoinGecko API
+The Circom circuit (215 constraints) proves that `AVG(balance_1, balance_2, balance_3)` falls within a tier's bounds.
 
-**Aggregator:**
-- Sums balances across all wallets and chains
-- Returns 3 total snapshots for circuit input
+**Private inputs:** `balance_1`, `balance_2`, `balance_3` — aggregated USD totals in cents across all wallets and chains.
 
-### 3. Core SDK (`packages/core`)
+**Public inputs:** `tier_lower_bound`, `tier_upper_bound`, `nullifier`, `timestamp`
 
-**Prover:**
-- Wraps snarkjs `groth16.fullProve()`
-- Determines tier from minimum balance
-- Generates proof (~5-15 seconds)
+The circuit computes the average using integer division with remainder verification, then range-checks it against the tier bounds.
 
-**Verifier:**
-- Wraps snarkjs `groth16.verify()`
-- Validates proof against verification key
-- Extracts tier and public signals
+### Chain Adapters
 
-**Nullifier:**
-- Uses Poseidon hash: `hash(wallet_addresses + user_secret)`
-- Prevents same wallet set from being used in multiple accounts
+Each adapter fetches historical balances at 3 snapshot dates (today, 45 days ago, 90 days ago). The aggregator sums across all wallets and chains per snapshot, producing 3 total balance figures in USD cents.
 
-### 4. Tier System
+Price lookups use a module-level cache shared across all EVM chains — ETH price is fetched once and reused for Ethereum, Arbitrum, and Base.
 
-| Tier | Range | Badge |
-|------|-------|-------|
-| 1 | < $1K | 🌱 Seed |
-| 2 | $1K – $10K | 🌿 Sprout |
-| 3 | $10K – $50K | 🌳 Tree |
-| 4 | $50K – $250K | 🏔️ Mountain |
-| 5 | $250K – $1M | 🌊 Ocean |
-| 6 | $1M – $5M | 🌕 Moon |
-| 7 | $5M+ | ☀️ Sun |
+### Proof Generation
+
+1. Fetch historical balances across all wallets/chains
+2. Compute Poseidon nullifier from wallet addresses + user secret
+3. Determine tier from average balance
+4. Generate Groth16 proof via snarkjs
+5. Verify proof against verification key
+
+The nullifier prevents the same wallet set from generating proofs for multiple accounts.
 
 ## Testing
 
 ```bash
-# Test circuit
-cd packages/circuits
-npm test
+# Circuit tests (20 test cases including boundary conditions)
+cd packages/circuits && npm test
 
-# Test chain adapters
-cd packages/chain-adapters
-npm test
+# Chain adapter tests
+cd packages/chain-adapters && npm test
 
-# Test core SDK
-cd packages/core
-npm test
+# Core SDK tests
+cd packages/core && npm test
 ```
-
-## Resources
-
-- [Circom Documentation](https://docs.circom.io/)
-- [snarkjs GitHub](https://github.com/iden3/snarkjs)
-- [Anon Aadhaar Reference](https://github.com/anon-aadhaar/anon-aadhaar)
-- [Helius RPC Docs](https://www.helius.dev/docs)
-- [Alchemy Docs](https://docs.alchemy.com/)
-
