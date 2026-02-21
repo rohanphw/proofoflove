@@ -203,49 +203,6 @@ cd packages/core
 npm test
 ```
 
-## Known Limitations (MVP)
-
-### Accepted for MVP:
-
-1. **Client-Side Aggregation**: Balance aggregation happens in JavaScript before entering the circuit. A sophisticated user could lie about inputs. ✅ ACCEPTED (production needs light client proofs)
-
-2. **Development Trusted Setup**: Single-party setup means we could theoretically forge proofs. ✅ ACCEPTED (production needs MPC ceremony)
-
-3. **Limited Token Support**: Only major tokens (SOL, ETH, USDC, USDT, WBTC). Unknown tokens valued at $0. ✅ ACCEPTABLE
-
-4. **Historical Price Approximation**: Using external APIs (Pyth, CoinGecko) for prices. ✅ ACCEPTABLE
-
-### Performance:
-- Circuit compilation: ~2-5 minutes (one-time)
-- Trusted setup: ~5-10 minutes (one-time)
-- Balance fetching: ~30-60 seconds
-- Proof generation: ~5-15 seconds
-- Proof verification: <100ms
-
-## Next Steps
-
-After validating the circuit MVP:
-
-1. **Desktop Web App** (Next.js)
-   - Wallet connection UI (Solana Wallet Adapter + wagmi)
-   - Balance fetching progress UI
-   - Browser-based proof generation
-
-2. **Backend API** (Node.js + PostgreSQL)
-   - POST /api/verify-proof endpoint
-   - Store verified tiers
-   - User profiles + auth
-
-3. **Mobile App** (PWA)
-   - Profile feed with blurred photos + tier badges
-   - Swipe mechanic
-   - Chat with progressive unblur
-
-4. **Production Hardening:**
-   - Multi-party trusted setup ceremony
-   - On-chain balance proof (Merkle proofs)
-   - Security audit
-
 ## Resources
 
 - [Circom Documentation](https://docs.circom.io/)
