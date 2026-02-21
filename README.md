@@ -1,6 +1,6 @@
 # Proof of Love — ZK Wealth Verification
 
-A zero-knowledge proof system for verifying cryptocurrency wealth tiers without revealing exact balances. Built with Circom, snarkjs, and multi-chain balance adapters.
+A zero-knowledge proof system for verifying cryptocurrency wealth tiers without revealing exact balances. Built with Circom, snarkjs, and multi-chain balance adapters. The idea is to build a dating app which uses your wealth as the deciding factor. It's a WIP, right now it only generates a ZK proof of your onchain wealth using manual selection of wallets without any verification, I will eventually complete this
 
 ## What It Does
 
