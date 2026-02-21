@@ -1,13 +1,15 @@
 {
   "heliusApiKey": "your-helius-api-key-here",
-  "alchemyApiKey": "your-alchemy-api-key-here",
+  "ethereumRpcUrl": "https://your-ethereum-rpc-url",
+  "arbitrumRpcUrl": "https://your-arbitrum-rpc-url",
+  "baseRpcUrl": "https://your-base-rpc-url",
   "testWallets": {
     "solana": [
-      "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM"
+      "your-solana-wallet-address"
     ],
-    "ethereum": [
-      "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+    "evm": [
+      "0x-your-evm-wallet-address"
     ]
   },
-  "userSecret": "my-secret-phrase-12345"
+  "userSecret": "my-secret-phrase"
 }
