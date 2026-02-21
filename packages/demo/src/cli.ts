@@ -51,13 +51,31 @@ async function main() {
   });
 
   const ethAdapter = new EthereumAdapter({
-    apiKey: config.alchemyApiKey,
-    network: "mainnet",
+    apiKey: config.ethereumRpcUrl,
+    network: "ethereum",
+  });
+
+  const arbitrumAdapter = new EthereumAdapter({
+    apiKey: config.arbitrumRpcUrl,
+    network: "arbitrum",
+  });
+
+  const baseAdapter = new EthereumAdapter({
+    apiKey: config.baseRpcUrl,
+    network: "base",
+  });
+
+  const hyperevmAdapter = new EthereumAdapter({
+    apiKey: config.hyperevmRpcUrl || "https://rpc.hyperliquid.xyz/evm",
+    network: "hyperevm",
   });
 
   const aggregator = new BalanceAggregator();
   aggregator.registerAdapter(solanaAdapter);
   aggregator.registerAdapter(ethAdapter);
+  aggregator.registerAdapter(arbitrumAdapter);
+  aggregator.registerAdapter(baseAdapter);
+  aggregator.registerAdapter(hyperevmAdapter);
 
   console.log(
     `✓ Registered chains: ${aggregator.getRegisteredChains().join(", ")}\n`,
@@ -65,12 +83,24 @@ async function main() {
 
   // Step 3: Prepare wallet list
   const wallets: Array<{ chain: string; address: string }> = [
-    ...config.testWallets.solana.map((addr: string) => ({
+    ...(config.testWallets.solana || []).map((addr: string) => ({
       chain: "solana",
       address: addr,
     })),
-    ...config.testWallets.ethereum.map((addr: string) => ({
+    ...(config.testWallets.ethereum || []).map((addr: string) => ({
       chain: "ethereum",
+      address: addr,
+    })),
+    ...(config.testWallets.arbitrum || []).map((addr: string) => ({
+      chain: "arbitrum",
+      address: addr,
+    })),
+    ...(config.testWallets.base || []).map((addr: string) => ({
+      chain: "base",
+      address: addr,
+    })),
+    ...(config.testWallets.hyperevm || []).map((addr: string) => ({
+      chain: "hyperevm",
       address: addr,
     })),
   ];
@@ -122,7 +152,8 @@ async function main() {
   console.log("Generating zero-knowledge proof...");
   console.log("(This may take 5-15 seconds)\n");
 
-  const circuitBuildPath = path.join(__dirname, "../../../circuits/build");
+  // __dirname = packages/demo/src → ../../circuits/build = packages/circuits/build
+  const circuitBuildPath = path.resolve(__dirname, "../../circuits/build");
   const wasmPath = path.join(
     circuitBuildPath,
     "wealth_tier_js/wealth_tier.wasm",
@@ -186,7 +217,7 @@ async function main() {
   console.log("========================================\n");
 
   console.log("What just happened:");
-  console.log("1. ✓ Fetched real blockchain balances from Solana + Ethereum");
+  console.log("1. ✓ Fetched real blockchain balances from Solana + EVM chains");
   console.log("2. ✓ Aggregated balances across all wallets at 3 time points");
   console.log(
     "3. ✓ Generated ZK proof using AVERAGE balance (more forgiving!)",

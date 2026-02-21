@@ -60,18 +60,45 @@ interface PythHistoryResponse {
   s?: string;
 }
 
+// Known SPL tokens we care about — everything else is ignored
+// priceAs: use this symbol for price lookup (e.g. hSOL priced as SOL)
+const KNOWN_SPL_TOKENS: Record<
+  string,
+  { symbol: string; stablecoin: boolean; priceAs?: string }
+> = {
+  EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: {
+    symbol: "USDC",
+    stablecoin: true,
+  },
+  Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB: {
+    symbol: "USDT",
+    stablecoin: true,
+  },
+  he1iusmfkpAdwvxLNGV8Y1iSbj4rUy6yMhEA3fotn9A: {
+    symbol: "hSOL",
+    stablecoin: false,
+    priceAs: "SOL",
+  },
+};
+
+// Pyth Hermes feed IDs for live price lookups
+const HERMES_FEED_IDS: Record<string, string> = {
+  SOL: "0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d",
+};
+
+// Module-level price cache shared across calls
+const solPriceCache = new Map<string, number>();
+
+function priceCacheKey(symbol: string, timestamp: number): string {
+  const date = new Date(timestamp * 1000);
+  return `${symbol}-${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
 /**
  * Solana adapter using Helius RPC for historical balance queries
  *
- * Uses Helius-exclusive `getTransactionsForAddress` method to reconstruct
- * historical balances from transaction metadata (preBalances/postBalances
- * and preTokenBalances/postTokenBalances).
- *
- * This is the only reliable way to get historical Solana account state
- * without running your own indexer — standard RPC methods like getBalance
- * and getTokenAccountsByOwner only return current state.
- *
- * Requires Helius Developer plan or higher (100 credits per gTFA call).
+ * Fetches: SOL (priced via Pyth), USDC ($1), USDT ($1), hSOL (priced as SOL)
+ * All other SPL tokens are ignored for MVP.
  */
 export class SolanaAdapter implements ChainAdapter {
   readonly chainName = "solana";
@@ -81,7 +108,6 @@ export class SolanaAdapter implements ChainAdapter {
 
   constructor(config: AdapterConfig) {
     this.apiKey = config.apiKey;
-    const network = config.network || "mainnet-beta";
     this.rpcEndpoint =
       config.rpcEndpoint ||
       `https://mainnet.helius-rpc.com/?api-key=${config.apiKey}`;
@@ -101,13 +127,13 @@ export class SolanaAdapter implements ChainAdapter {
         snapshot.unixTimestamp,
       );
 
-      // Step 2: Get SPL token balances at target timestamp
+      // Step 2: Get SPL token balances (USDC, USDT, hSOL)
       const splBalances = await this.getSPLBalancesAtTimestamp(
         walletAddress,
         snapshot.unixTimestamp,
       );
 
-      // Step 3: Get SOL/USD price at that timestamp
+      // Step 3: Get SOL/USD price (cached per date)
       const solPrice = await this.getPriceAtTimestamp(
         "SOL",
         snapshot.unixTimestamp,
@@ -118,11 +144,18 @@ export class SolanaAdapter implements ChainAdapter {
 
       // Add SPL token values
       for (const token of splBalances) {
-        const tokenPrice = await this.getTokenPrice(
-          token.mint,
-          snapshot.unixTimestamp,
-        );
-        totalUsdCents += Math.floor(token.uiAmount * tokenPrice * 100);
+        if (token.stablecoin) {
+          // USDC/USDT = $1
+          totalUsdCents += Math.floor(token.uiAmount * 100);
+        } else {
+          // Non-stablecoin: fetch price (hSOL uses SOL price via priceAs)
+          const priceSymbol = token.priceAs || token.symbol;
+          const price = await this.getPriceAtTimestamp(
+            priceSymbol,
+            snapshot.unixTimestamp,
+          );
+          totalUsdCents += Math.floor(token.uiAmount * price * 100);
+        }
       }
 
       results.push(totalUsdCents);
@@ -137,12 +170,6 @@ export class SolanaAdapter implements ChainAdapter {
 
   /**
    * Get SOL balance at a specific timestamp using getTransactionsForAddress.
-   *
-   * Strategy: Fetch the most recent transaction affecting this wallet at or before
-   * the target timestamp. The transaction's postBalances array contains the SOL
-   * balance of every account after that tx executed — giving us the historical balance.
-   *
-   * The wallet's own balance is at the index matching its position in accountKeys.
    */
   private async getSOLBalanceAtTimestamp(
     address: string,
@@ -165,9 +192,7 @@ export class SolanaAdapter implements ChainAdapter {
               sortOrder: "desc",
               limit: 1,
               filters: {
-                blockTime: {
-                  lte: targetTimestamp,
-                },
+                blockTime: { lte: targetTimestamp },
                 status: "succeeded",
               },
             },
@@ -210,7 +235,6 @@ export class SolanaAdapter implements ChainAdapter {
         return 0;
       }
 
-      // Convert lamports to SOL
       return postBalance / 1e9;
     } catch (error) {
       console.warn(
@@ -222,24 +246,21 @@ export class SolanaAdapter implements ChainAdapter {
   }
 
   /**
-   * Get SPL token balances at a specific timestamp using getTransactionsForAddress.
-   *
-   * Strategy: Fetch the most recent transaction that changed any token balance
-   * for this wallet. The transaction's postTokenBalances contains the token state
-   * after execution.
-   *
-   * Uses tokenAccounts: "balanceChanged" to include ATA (Associated Token Account)
-   * transactions — essential since tokens live in ATAs, not the wallet directly.
-   *
-   * CAVEAT: A single transaction's postTokenBalances only shows tokens involved
-   * in THAT transaction, not all tokens the wallet holds. For a complete picture,
-   * we'd need to scan back through multiple transactions. For MVP, we fetch a
-   * small batch and merge the most recent state per mint.
+   * Get SPL token balances at a specific timestamp.
+   * Only returns known tokens (USDC, USDT, hSOL) — all other mints are ignored.
    */
   private async getSPLBalancesAtTimestamp(
     address: string,
     targetTimestamp: number,
-  ): Promise<Array<{ mint: string; uiAmount: number }>> {
+  ): Promise<
+    Array<{
+      mint: string;
+      symbol: string;
+      uiAmount: number;
+      stablecoin: boolean;
+      priceAs?: string;
+    }>
+  > {
     try {
       const response = await fetch(this.rpcEndpoint, {
         method: "POST",
@@ -257,9 +278,7 @@ export class SolanaAdapter implements ChainAdapter {
               sortOrder: "desc",
               limit: 20,
               filters: {
-                blockTime: {
-                  lte: targetTimestamp,
-                },
+                blockTime: { lte: targetTimestamp },
                 status: "succeeded",
                 tokenAccounts: "balanceChanged",
               },
@@ -285,12 +304,15 @@ export class SolanaAdapter implements ChainAdapter {
         return [];
       }
 
-      // Collect the most recent postTokenBalance per mint
-      // Since txs are sorted desc (newest first), the first occurrence of each
-      // mint is the most recent state
       const latestByMint = new Map<
         string,
-        { mint: string; uiAmount: number }
+        {
+          mint: string;
+          symbol: string;
+          uiAmount: number;
+          stablecoin: boolean;
+          priceAs?: string;
+        }
       >();
 
       for (const tx of txs) {
@@ -301,9 +323,11 @@ export class SolanaAdapter implements ChainAdapter {
           const mint = tokenBal.mint;
 
           if (!mint || !owner) continue;
-
-          // Only include token balances owned by our wallet
           if (owner !== address) continue;
+
+          // Only track known tokens (USDC, USDT, hSOL)
+          const knownToken = KNOWN_SPL_TOKENS[mint];
+          if (!knownToken) continue;
 
           // Only take the first (most recent) occurrence per mint
           if (latestByMint.has(mint)) continue;
@@ -314,7 +338,13 @@ export class SolanaAdapter implements ChainAdapter {
               Math.pow(10, tokenBal.uiTokenAmount?.decimals || 0);
 
           if (uiAmount > 0) {
-            latestByMint.set(mint, { mint, uiAmount });
+            latestByMint.set(mint, {
+              mint,
+              symbol: knownToken.symbol,
+              uiAmount,
+              stablecoin: knownToken.stablecoin,
+              priceAs: knownToken.priceAs,
+            });
           }
         }
       }
@@ -331,8 +361,6 @@ export class SolanaAdapter implements ChainAdapter {
 
   /**
    * Extract account keys from a transaction, handling both legacy and versioned formats.
-   * jsonParsed encoding returns accountKeys as objects with { pubkey, signer, writable }
-   * or as plain strings depending on the tx version.
    */
   private extractAccountKeys(tx: FullTransactionResult): string[] {
     const message = tx.transaction?.message;
@@ -358,11 +386,81 @@ export class SolanaAdapter implements ChainAdapter {
   }
 
   /**
-   * Get historical price for SOL/USD from Pyth Benchmarks API
+   * Get price for SOL/USD (or any supported symbol).
+   * - For "now" timestamps (within last 2 hours): use Pyth Hermes for live price
+   * - For historical timestamps: use Pyth TradingView history
+   * Cached per date so repeated calls are free.
    */
   private async getPriceAtTimestamp(
     symbol: string,
     timestamp: number,
+  ): Promise<number> {
+    const cacheKey = priceCacheKey(symbol, timestamp);
+    const cached = solPriceCache.get(cacheKey);
+    if (cached !== undefined) return cached;
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    const isRecent = Math.abs(nowSec - timestamp) < 7200; // within 2 hours
+
+    if (isRecent) {
+      return this.getLivePriceFromHermes(symbol, cacheKey);
+    }
+
+    return this.getHistoricalPriceFromPyth(symbol, timestamp, cacheKey);
+  }
+
+  /**
+   * Fetch live price from Pyth Hermes v2 API
+   */
+  private async getLivePriceFromHermes(
+    symbol: string,
+    cacheKey: string,
+  ): Promise<number> {
+    const feedId = HERMES_FEED_IDS[symbol];
+    if (!feedId) {
+      console.warn(`No Hermes feed ID for ${symbol}, using fallback`);
+      const fallback = symbol === "SOL" ? 100 : 0;
+      solPriceCache.set(cacheKey, fallback);
+      return fallback;
+    }
+
+    try {
+      const response = await fetch(
+        `https://hermes.pyth.network/v2/updates/price/latest?ids[]=${feedId}&parsed=true`,
+      );
+
+      if (!response.ok) {
+        throw new Error(`Hermes API error: ${response.statusText}`);
+      }
+
+      const data = (await response.json()) as any;
+      const priceFeed = data?.parsed?.[0]?.price;
+
+      if (priceFeed) {
+        const price = Number(priceFeed.price) * Math.pow(10, priceFeed.expo);
+        solPriceCache.set(cacheKey, price);
+        return price;
+      }
+
+      throw new Error(`No parsed price in Hermes response for ${symbol}`);
+    } catch (error) {
+      console.warn(
+        `Failed to fetch live price for ${symbol} from Hermes:`,
+        error,
+      );
+      const fallback = symbol === "SOL" ? 100 : 0;
+      solPriceCache.set(cacheKey, fallback);
+      return fallback;
+    }
+  }
+
+  /**
+   * Fetch historical price from Pyth TradingView API
+   */
+  private async getHistoricalPriceFromPyth(
+    symbol: string,
+    timestamp: number,
+    cacheKey: string,
   ): Promise<number> {
     try {
       const pythSymbol = `Crypto.${symbol}/USD`;
@@ -380,39 +478,18 @@ export class SolanaAdapter implements ChainAdapter {
 
       const data = (await response.json()) as PythHistoryResponse;
       if (data.c && data.c.length > 0) {
-        return data.c[0];
+        const price = data.c[0];
+        solPriceCache.set(cacheKey, price);
+        return price;
       }
 
       throw new Error(`No price data for ${symbol} at ${timestamp}`);
     } catch (error) {
       console.warn(`Failed to fetch price for ${symbol}:`, error);
-      return symbol === "SOL" ? 100 : 0;
+      const fallback = symbol === "SOL" ? 100 : 0;
+      solPriceCache.set(cacheKey, fallback);
+      return fallback;
     }
-  }
-
-  /**
-   * Get price for SPL token
-   * For MVP: Only support major stablecoins (USDC, USDT)
-   */
-  private async getTokenPrice(
-    mint: string,
-    timestamp: number,
-  ): Promise<number> {
-    const KNOWN_TOKENS: { [key: string]: string } = {
-      EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: "USDC",
-      Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB: "USDT",
-    };
-
-    const symbol = KNOWN_TOKENS[mint];
-    if (!symbol) {
-      return 0;
-    }
-
-    if (symbol === "USDC" || symbol === "USDT") {
-      return 1.0;
-    }
-
-    return this.getPriceAtTimestamp(symbol, timestamp);
   }
 
   isValidAddress(address: string): boolean {

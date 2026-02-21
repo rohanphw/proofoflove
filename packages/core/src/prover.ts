@@ -1,6 +1,6 @@
-import { groth16 } from 'snarkjs';
-import { getTierForBalance } from './tiers.js';
-import type { ProofData, CircuitInputs } from './types.js';
+import { groth16 } from "snarkjs";
+import { getTierForBalance } from "./tiers.js";
+import type { ProofData, CircuitInputs } from "./types.js";
 
 /**
  * Wealth tier proof generator
@@ -35,14 +35,18 @@ export class WealthProver {
   async generateProof(
     balances: [number, number, number],
     nullifier: bigint,
-    timestamp: number = Math.floor(Date.now() / 1000)
+    timestamp: number = Math.floor(Date.now() / 1000),
   ): Promise<ProofData> {
     if (!this.wasmPath || !this.zkeyPath) {
-      throw new Error('Prover not initialized with artifact paths. Use generateProofBrowser() instead.');
+      throw new Error(
+        "Prover not initialized with artifact paths. Use generateProofBrowser() instead.",
+      );
     }
 
     // Determine tier from average balance (floor division)
-    const avgBalance = Math.floor((balances[0] + balances[1] + balances[2]) / 3);
+    const avgBalance = Math.floor(
+      (balances[0] + balances[1] + balances[2]) / 3,
+    );
     const tier = getTierForBalance(avgBalance);
 
     console.log(`Generating proof for Tier ${tier.tier} (${tier.label})`);
@@ -56,31 +60,40 @@ export class WealthProver {
       tier_lower_bound: tier.lowerBound.toString(),
       tier_upper_bound: tier.upperBound.toString(),
       nullifier: nullifier.toString(),
-      timestamp: timestamp.toString()
+      timestamp: timestamp.toString(),
     };
 
-    console.log('Generating witness and proof (this may take 5-15 seconds)...');
+    console.log("Generating witness and proof (this may take 5-15 seconds)...");
 
     try {
-      // Generate proof using snarkjs
-      const { proof, publicSignals } = await groth16.fullProve(
-        inputs,
-        this.wasmPath,
-        this.zkeyPath
+      // Read wasm file into buffer to avoid snarkjs path resolution issues
+      const fs = await import("fs/promises");
+      const wasmBuffer = await fs.readFile(
+        this.wasmPath.endsWith(".wasm")
+          ? this.wasmPath
+          : `${this.wasmPath}/wealth_tier.wasm`,
       );
 
-      console.log('✓ Proof generated successfully!');
+      const { proof, publicSignals } = await groth16.fullProve(
+        inputs as unknown as Record<string, string>,
+        new Uint8Array(wasmBuffer),
+        this.zkeyPath,
+      );
+
+      console.log("✓ Proof generated successfully!");
 
       return {
         proof,
         publicSignals,
         tier: tier.tier,
         tierLabel: tier.label,
-        timestamp
+        timestamp,
       };
     } catch (error) {
-      console.error('✗ Proof generation failed:', error);
-      throw new Error(`Proof generation failed: ${error instanceof Error ? error.message : String(error)}`);
+      console.error("✗ Proof generation failed:", error);
+      throw new Error(
+        `Proof generation failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -96,9 +109,11 @@ export class WealthProver {
     balances: [number, number, number],
     nullifier: bigint,
     wasmBuffer: ArrayBuffer,
-    zkeyBuffer: ArrayBuffer
+    zkeyBuffer: ArrayBuffer,
   ): Promise<ProofData> {
-    const avgBalance = Math.floor((balances[0] + balances[1] + balances[2]) / 3);
+    const avgBalance = Math.floor(
+      (balances[0] + balances[1] + balances[2]) / 3,
+    );
     const tier = getTierForBalance(avgBalance);
     const timestamp = Math.floor(Date.now() / 1000);
 
@@ -109,15 +124,15 @@ export class WealthProver {
       tier_lower_bound: tier.lowerBound.toString(),
       tier_upper_bound: tier.upperBound.toString(),
       nullifier: nullifier.toString(),
-      timestamp: timestamp.toString()
+      timestamp: timestamp.toString(),
     };
 
     try {
       // Use snarkjs with in-memory buffers
       const { proof, publicSignals } = await groth16.fullProve(
-        inputs,
+        inputs as unknown as Record<string, string>,
         new Uint8Array(wasmBuffer),
-        new Uint8Array(zkeyBuffer)
+        new Uint8Array(zkeyBuffer),
       );
 
       return {
@@ -125,10 +140,12 @@ export class WealthProver {
         publicSignals,
         tier: tier.tier,
         tierLabel: tier.label,
-        timestamp
+        timestamp,
       };
     } catch (error) {
-      throw new Error(`Browser proof generation failed: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Browser proof generation failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 

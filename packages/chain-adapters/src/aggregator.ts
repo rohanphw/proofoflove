@@ -1,4 +1,9 @@
-import type { ChainAdapter, BalanceResult, Snapshot, WalletSpec } from './types.js';
+import type {
+  ChainAdapter,
+  BalanceResult,
+  Snapshot,
+  WalletSpec,
+} from "./types.js";
 
 /**
  * Aggregates balances from multiple wallets across multiple blockchains
@@ -19,43 +24,63 @@ export class BalanceAggregator {
    * Aggregate balances across all connected wallets
    * Returns 3 total USD values (in cents) - one for each snapshot
    *
+   * Wallets are fetched sequentially with a small delay between each
+   * to avoid rate limiting from CoinGecko, Helius, and RPC providers.
+   *
    * @param wallets - Array of wallet specifications { chain, address }
    * @param snapshots - 3 time points to query balances
    * @returns Tuple of 3 total balances in USD cents
    */
   async aggregateBalances(
     wallets: WalletSpec[],
-    snapshots: [Snapshot, Snapshot, Snapshot]
+    snapshots: [Snapshot, Snapshot, Snapshot],
   ): Promise<[number, number, number]> {
     if (wallets.length === 0) {
-      throw new Error('No wallets provided');
+      throw new Error("No wallets provided");
     }
 
-    console.log(`Aggregating balances for ${wallets.length} wallet(s) at 3 snapshots...`);
+    console.log(
+      `Aggregating balances for ${wallets.length} wallet(s) at 3 snapshots...`,
+    );
 
-    // Fetch balances for all wallets in parallel
-    const promises = wallets.map(async (wallet, index) => {
+    const results: BalanceResult[] = [];
+
+    // Fetch wallets sequentially to avoid rate limiting
+    for (let index = 0; index < wallets.length; index++) {
+      const wallet = wallets[index];
       const adapter = this.adapters.get(wallet.chain);
+
       if (!adapter) {
         throw new Error(`No adapter registered for chain: ${wallet.chain}`);
       }
 
-      console.log(`  [${index + 1}/${wallets.length}] Fetching ${wallet.chain} wallet: ${wallet.address.slice(0, 8)}...`);
+      console.log(
+        `  [${index + 1}/${wallets.length}] Fetching ${wallet.chain} wallet: ${wallet.address.slice(0, 8)}...`,
+      );
 
       try {
-        return await adapter.fetchBalancesAtSnapshots(wallet.address, snapshots);
+        const result = await adapter.fetchBalancesAtSnapshots(
+          wallet.address,
+          snapshots,
+        );
+        results.push(result);
       } catch (error) {
-        console.error(`    ✗ Failed to fetch ${wallet.chain} wallet ${wallet.address}:`, error);
-        // Return zero balances for failed wallets (don't block entire aggregation)
-        return {
+        console.error(
+          `    ✗ Failed to fetch ${wallet.chain} wallet ${wallet.address}:`,
+          error,
+        );
+        results.push({
           walletAddress: wallet.address,
           chain: wallet.chain,
-          snapshots: [0, 0, 0] as [number, number, number]
-        };
+          snapshots: [0, 0, 0] as [number, number, number],
+        });
       }
-    });
 
-    const results = await Promise.all(promises);
+      // Small delay between wallets to respect rate limits
+      if (index < wallets.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+    }
 
     // Sum balances across all wallets for each snapshot
     const totals: [number, number, number] = [0, 0, 0];
@@ -65,42 +90,50 @@ export class BalanceAggregator {
       totals[1] += result.snapshots[1];
       totals[2] += result.snapshots[2];
 
-      console.log(`    ✓ ${result.chain} balance: $${(result.snapshots[0] / 100).toFixed(2)}, $${(result.snapshots[1] / 100).toFixed(2)}, $${(result.snapshots[2] / 100).toFixed(2)}`);
+      console.log(
+        `    ✓ ${result.chain} balance: $${(result.snapshots[0] / 100).toFixed(2)}, $${(result.snapshots[1] / 100).toFixed(2)}, $${(result.snapshots[2] / 100).toFixed(2)}`,
+      );
     }
 
     console.log(`\nTotal aggregated balances:`);
-    console.log(`  Snapshot 1 (${snapshots[0].date.toLocaleDateString()}): $${(totals[0] / 100).toFixed(2)}`);
-    console.log(`  Snapshot 2 (${snapshots[1].date.toLocaleDateString()}): $${(totals[1] / 100).toFixed(2)}`);
-    console.log(`  Snapshot 3 (${snapshots[2].date.toLocaleDateString()}): $${(totals[2] / 100).toFixed(2)}`);
+    console.log(
+      `  Snapshot 1 (${snapshots[0].date.toLocaleDateString()}): $${(totals[0] / 100).toFixed(2)}`,
+    );
+    console.log(
+      `  Snapshot 2 (${snapshots[1].date.toLocaleDateString()}): $${(totals[1] / 100).toFixed(2)}`,
+    );
+    console.log(
+      `  Snapshot 3 (${snapshots[2].date.toLocaleDateString()}): $${(totals[2] / 100).toFixed(2)}`,
+    );
 
     return totals;
   }
 
   /**
-   * Generate 3 snapshot time points: ~now, ~30 days ago, ~60 days ago
-   * These represent the 90-day lookback period for tier calculation
+   * Generate 3 snapshot time points: ~now, ~45 days ago, ~90 days ago
+   * Evenly spaced across a full quarter for a more representative average.
    */
   static generateSnapshots(): [Snapshot, Snapshot, Snapshot] {
     const now = new Date();
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+    const fortyFiveDaysAgo = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1000);
+    const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
 
     return [
       {
         date: now,
         unixTimestamp: Math.floor(now.getTime() / 1000),
-        chainIdentifier: 'latest'
+        chainIdentifier: "latest",
       },
       {
-        date: thirtyDaysAgo,
-        unixTimestamp: Math.floor(thirtyDaysAgo.getTime() / 1000),
-        chainIdentifier: 0 // Will be determined by adapter
+        date: fortyFiveDaysAgo,
+        unixTimestamp: Math.floor(fortyFiveDaysAgo.getTime() / 1000),
+        chainIdentifier: 0,
       },
       {
-        date: sixtyDaysAgo,
-        unixTimestamp: Math.floor(sixtyDaysAgo.getTime() / 1000),
-        chainIdentifier: 0 // Will be determined by adapter
-      }
+        date: ninetyDaysAgo,
+        unixTimestamp: Math.floor(ninetyDaysAgo.getTime() / 1000),
+        chainIdentifier: 0,
+      },
     ];
   }
 
