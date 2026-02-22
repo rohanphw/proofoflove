@@ -24,19 +24,19 @@ All values are in USD, calculated as the average across 3 snapshots.
 | 6 | 🌕 Moon | $1M – $5M |
 | 7 | ☀️ Sun | $5M+ |
 
-## Supported Chains & Tokens
+## Supported Chains
 
-**Solana** — SOL, USDC, USDT, hSOL
+**Solana** — All SPL tokens discovered dynamically via Helius DAS
 
-**Ethereum** — ETH, USDC, USDT, WBTC
+**Ethereum** — Native ETH + all ERC-20 tokens discovered via QuickNode Token API
 
-**Arbitrum** — ETH, USDC, USDC.e, USDT, WBTC
+**Arbitrum** — Native ETH + all ERC-20 tokens discovered via QuickNode Token API
 
-**Base** — ETH, USDC, USDbC
+**Base** — Native ETH + all ERC-20 tokens discovered via QuickNode Token API
 
-**HyperEVM** — HYPE (public RPC, no API key needed)
+**HyperEVM** — Native HYPE (public RPC, no API key needed)
 
-Prices are fetched via Pyth Hermes (live) and CoinGecko → Pyth TradingView
+No hardcoded token lists — the system automatically discovers your holdings and prices them via Pyth Hermes (live), DeFiLlama (live + historical), Jupiter Price API (Solana fallback), and Pyth TradingView (historical fallback).
 
 ## Project Structure
 
