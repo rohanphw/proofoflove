@@ -1,4 +1,4 @@
-import { Buffer } from 'buffer';
+import { Buffer } from "buffer";
 (window as any).Buffer = Buffer;
 import "./web.css";
 
@@ -156,19 +156,19 @@ function renderConfig() {
             <h3 class="section-label">🔑 API Keys</h3>
             <label class="form-label">
               Helius API Key <span class="label-hint">(Solana)</span>
-              <input type="text" class="form-input" id="input-helius" value="${state.heliusApiKey}" placeholder="Your Helius API Key..." />
+              <input type="text" class="form-input" id="input-helius" value="${state.heliusApiKey}" placeholder="your-helius-api-key" />
             </label>
             <label class="form-label">
               Ethereum RPC URL
-              <input type="text" class="form-input" id="input-eth-rpc" value="${state.ethereumRpcUrl}" placeholder="Your Ethereum RPC URL..." />
+              <input type="text" class="form-input" id="input-eth-rpc" value="${state.ethereumRpcUrl}" placeholder="https://eth-mainnet.g.alchemy.com/v2/..." />
             </label>
             <label class="form-label">
               Arbitrum RPC URL
-              <input type="text" class="form-input" id="input-arb-rpc" value="${state.arbitrumRpcUrl}" placeholder="Your Arbitrum RPC URL..." />
+              <input type="text" class="form-input" id="input-arb-rpc" value="${state.arbitrumRpcUrl}" placeholder="https://arb-mainnet.g.alchemy.com/v2/..." />
             </label>
             <label class="form-label">
               Base RPC URL
-              <input type="text" class="form-input" id="input-base-rpc" value="${state.baseRpcUrl}" placeholder="Your Base RPC URL..." />
+              <input type="text" class="form-input" id="input-base-rpc" value="${state.baseRpcUrl}" placeholder="https://base-mainnet.g.alchemy.com/v2/..." />
             </label>
           </div>
 
@@ -176,11 +176,11 @@ function renderConfig() {
             <h3 class="section-label">👛 Wallets</h3>
             <label class="form-label">
               Solana Wallets <span class="label-hint">(one per line)</span>
-              <textarea class="form-textarea" id="input-sol-wallets" rows="3" placeholder="Your Solana wallet addresses...">${state.solanaWallets}</textarea>
+              <textarea class="form-textarea" id="input-sol-wallets" rows="3" placeholder="Your Solana address...">${state.solanaWallets}</textarea>
             </label>
             <label class="form-label">
               EVM Wallets <span class="label-hint">(one per line, shared across ETH/ARB/Base/HyperEVM)</span>
-              <textarea class="form-textarea" id="input-evm-wallets" rows="3" placeholder="Your EVM wallet addresses...">${state.evmWallets}</textarea>
+              <textarea class="form-textarea" id="input-evm-wallets" rows="3" placeholder="0x your EVM address...">${state.evmWallets}</textarea>
             </label>
             <label class="form-label">
               Secret Phrase <span class="label-hint">(for nullifier)</span>
@@ -206,7 +206,6 @@ function renderConfig() {
   });
 
   document.getElementById("btn-prove")!.addEventListener("click", () => {
-    // Save form state
     state.heliusApiKey = (
       document.getElementById("input-helius") as HTMLInputElement
     ).value.trim();
@@ -279,10 +278,6 @@ function renderResult() {
 
         <div class="result-stats">
           <div class="stat">
-            <span class="stat-label">Average Balance</span>
-            <span class="stat-value">${formatUsd(state.avgBalance)}</span>
-          </div>
-          <div class="stat">
             <span class="stat-label">Proof Status</span>
             <span class="stat-value ${state.proofValid ? "stat-valid" : "stat-invalid"}">
               ${state.proofValid ? "✅ Valid" : "❌ Invalid"}
@@ -291,22 +286,6 @@ function renderResult() {
           <div class="stat">
             <span class="stat-label">Timestamp</span>
             <span class="stat-value">${new Date(state.proofTimestamp * 1000).toISOString()}</span>
-          </div>
-        </div>
-
-        <div class="result-snapshots">
-          <h4>Snapshot Balances</h4>
-          <div class="snapshot-row">
-            ${state
-              .balances!.map(
-                (b, i) => `
-              <div class="snapshot-item">
-                <span class="snapshot-label">Snapshot ${i + 1}</span>
-                <span class="snapshot-value">${formatUsd(b)}</span>
-              </div>
-            `,
-              )
-              .join("")}
           </div>
         </div>
 
@@ -343,7 +322,6 @@ function scrollLogBox() {
 
 function addLog(msg: string) {
   state.logs.push(msg);
-  // Re-render only the log box for performance
   const box = document.getElementById("log-box");
   if (box) {
     box.innerHTML += `<div class="log-line">${escapeHtml(msg)}</div>`;
@@ -354,13 +332,11 @@ function addLog(msg: string) {
 // ─── Proof Flow ───
 async function startProofFlow() {
   try {
-    // Dynamic imports to avoid loading heavy deps on landing
     const { SolanaAdapter, EthereumAdapter, BalanceAggregator } =
       await import("@proofoflove/chain-adapters");
     const { WealthProver, WealthVerifier, generateNullifier, getTierBadge } =
       await import("@proofoflove/core");
 
-    // Build wallet list
     const wallets: Array<{ chain: string; address: string }> = [];
     const solAddrs = state.solanaWallets
       .split("\n")
@@ -382,7 +358,6 @@ async function startProofFlow() {
 
     addLog(`Registered ${wallets.length} wallet(s) across all chains`);
 
-    // Init adapters
     const aggregator = new BalanceAggregator();
 
     if (state.heliusApiKey) {
@@ -418,7 +393,6 @@ async function startProofFlow() {
       );
       addLog("✓ Base adapter registered");
     }
-    // HyperEVM uses public RPC
     aggregator.registerAdapter(
       new EthereumAdapter({
         apiKey: "https://rpc.hyperliquid.xyz/evm",
@@ -427,13 +401,11 @@ async function startProofFlow() {
     );
     addLog("✓ HyperEVM adapter registered");
 
-    // Snapshots
     const snapshots = BalanceAggregator.generateSnapshots();
     addLog(
       `Snapshots: ${snapshots.map((s) => s.date.toLocaleDateString()).join(", ")}`,
     );
 
-    // Redirect console.log to our log box
     const origLog = console.log;
     const origWarn = console.warn;
     console.log = (...args: any[]) => {
@@ -445,7 +417,6 @@ async function startProofFlow() {
       origWarn(...args);
     };
 
-    // Fetch balances
     addLog("Fetching historical balances (this may take 30-60s)...");
     const balances = await aggregator.aggregateBalances(wallets, snapshots);
     state.balances = balances;
@@ -454,13 +425,10 @@ async function startProofFlow() {
       (balances[0] + balances[1] + balances[2]) / 3,
     );
     state.avgBalance = avgBalance;
-    addLog(`Average balance: ${formatUsd(avgBalance)}`);
 
-    // Switch to proving step
     state.step = "proving";
     render();
 
-    // Generate nullifier
     addLog("Generating nullifier...");
     const nullifier = await generateNullifier(
       wallets.map((w) => w.address),
@@ -468,7 +436,6 @@ async function startProofFlow() {
     );
     addLog(`✓ Nullifier: ${nullifier.toString().slice(0, 16)}...`);
 
-    // Fetch circuit artifacts
     addLog("Loading circuit artifacts...");
     const wasmResp = await fetch("/circuits/wealth_tier.wasm");
     const zkeyResp = await fetch("/circuits/wealth_tier_final.zkey");
@@ -485,7 +452,6 @@ async function startProofFlow() {
       `✓ Loaded WASM (${(wasmBuffer.byteLength / 1024).toFixed(0)} KB) and zkey (${(zkeyBuffer.byteLength / 1024).toFixed(0)} KB)`,
     );
 
-    // Generate proof
     addLog("Generating zero-knowledge proof...");
     const prover = new WealthProver();
     const proofData = await prover.generateProofBrowser(
@@ -496,18 +462,15 @@ async function startProofFlow() {
     );
     addLog(`✅ Proof generated! Tier: ${getTierBadge(proofData.tier)}`);
 
-    // Verify proof
     addLog("Verifying proof...");
     const vkeyResp = await fetch("/circuits/verification_key.json");
     const vkey = await vkeyResp.json();
     const verifier = new WealthVerifier(vkey);
     const result = await verifier.verify(proofData);
 
-    // Restore console
     console.log = origLog;
     console.warn = origWarn;
 
-    // Set result state
     state.proofTier = getTierForBalance(avgBalance);
     state.proofTimestamp = proofData.timestamp;
     state.proofValid = result.valid;
