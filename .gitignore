@@ -58,3 +58,8 @@ packages/demo/public/circuits/*.wasm
 packages/demo/public/circuits/*.zkey
 packages/demo/public/circuits/*.json
 !packages/demo/public/circuits/.gitkeep
+
+# Solana / Anchor
+packages/verifier/target/
+packages/verifier/.anchor/
+test-ledger/
