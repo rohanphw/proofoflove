@@ -15,9 +15,17 @@
     "lint": "pnpm -r --stream lint"
   },
   "devDependencies": {
-    "@types/node": "^20.11.17",
-    "typescript": "^5.3.3",
+    "@coral-xyz/anchor": "^0.32.1",
+    "@solana/web3.js": "^1.98.4",
+    "@types/chai": "^5.2.3",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^20.19.33",
+    "chai": "^4.5.0",
+    "mocha": "^10.8.2",
+    "snarkjs": "^0.7.6",
+    "ts-mocha": "^11.1.0",
     "tsup": "^8.0.1",
+    "typescript": "^5.3.3",
     "vitest": "^1.2.2"
   },
   "engines": {
